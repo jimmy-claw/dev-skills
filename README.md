@@ -13,7 +13,8 @@ Each skill is a self-contained directory with:
 |-------|-------------|
 | [`logos-core-interop`](./logos-core-interop/) | Cross-module IPC via `logos_core_call_plugin_method_async` — the right way to call one Logos module from another |
 | [`lez-program-authoring`](./lez-program-authoring/) | Writing, deploying and registering LEZ programs (SPEL framework) |
-| [`logos-module-building`](./logos-module-building/) | Building Logos Core IComponent modules with Nix |
+| [](./dev-process/) | Patterns & anti-patterns from running AI coding agents on real projects |
+| [](./logos-module-building/) | Building Logos Core IComponent modules with Nix |
 
 ## Philosophy
 
