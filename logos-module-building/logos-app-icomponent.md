@@ -523,4 +523,5 @@ Your plugin appears in the left sidebar. Click it to load.
 | kv_module loses data on restart | Call `setDataDir` after getting kv client — switches to FileBackend |
 | `setDataDir` not found via ModuleProxy | Must be `Q_INVOKABLE` — was missing in early kv_module, fixed in PR#28 |
 | linker error: `Qt6RemoteObjects undefined` | Link `logos_sdk` before `Qt6::RemoteObjects` in CMake target_link_libraries |
+| UI plugin without backend module | logos-app silently ignores the plugin — always have a backend module even if it's a no-op stub |
 | cmake target conflict `scala_module_plugin already exists` | BUILD_MODULE and BUILD_UI_PLUGIN share same CMakeLists — rename one target (e.g. `your_headless_plugin`) |
