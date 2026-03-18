@@ -29,5 +29,6 @@ Auto-loading skills for the OpenClaw agent system. These live in `~/.openclaw/sk
 | Skill | Description |
 |-------|-------------|
 | [`agent-rules`](./openclaw-skills/agent-rules/) | Jimmy's operational rules — brain vs hands, device routing, delegation format |
+| [`dev-process`](./openclaw-skills/dev-process/) | Autonomous agent patterns — commit early, verify before announcing, retry rules |
 
 To install: `cd ~/.openclaw/skills && unzip openclaw-skills/<skill-name>.skill`
