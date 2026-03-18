@@ -32,5 +32,6 @@ Auto-loading skills for the OpenClaw agent system. These live in `~/.openclaw/sk
 | [`logos-module-builder`](./openclaw-skills/logos-module-builder/) | Build Logos Core IComponent modules — mkLogosModule, module.yaml, migration from nix/
 | [`logos-core-interop`](./openclaw-skills/logos-core-interop/) | Cross-module IPC — logos_core_call_plugin_method_async, Rust FFI bridge |
 | [`dev-process`](./openclaw-skills/dev-process/) | Autonomous agent patterns — commit early, verify before announcing, retry rules |
+| [`session-wrap-up`](./openclaw-skills/session-wrap-up/) | Meta-skill — review sessions for skill gaps, propose updates to dev-skills |
 
 To install: `cd ~/.openclaw/skills && unzip openclaw-skills/<skill-name>.skill`
