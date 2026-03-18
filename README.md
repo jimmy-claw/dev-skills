@@ -21,3 +21,13 @@ Each skill is a self-contained directory with:
 These aren't tutorials — they're the things that took time to figure out and shouldn't need figuring out twice.
 
 If something isn't in the official docs and you had to dig to find it, it belongs here.
+
+## OpenClaw Skills
+
+Auto-loading skills for the OpenClaw agent system. These live in `~/.openclaw/skills/` and trigger automatically based on task context.
+
+| Skill | Description |
+|-------|-------------|
+| [`agent-rules`](./openclaw-skills/agent-rules/) | Jimmy's operational rules — brain vs hands, device routing, delegation format |
+
+To install: `cd ~/.openclaw/skills && unzip openclaw-skills/<skill-name>.skill`
