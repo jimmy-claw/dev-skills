@@ -150,18 +150,14 @@ Currently loaded plugins:
 
 ---
 
-## initLogos() Pattern
+## initLogos() — One Critical Rule
+
+For the full pattern see [logos-app-icomponent](../logos-module-building/logos-app-icomponent.md). One thing that silently breaks everything:
 
 ```cpp
 void YourPlugin::initLogos(LogosAPI* api) {
-    logosAPI = api;  // ← REQUIRED: set base class field or ModuleProxy calls fail
-
-    auto* kvClient = api->getClient("kv_module");
-    if (kvClient) {
-        m_store.setClient(kvClient);
-    } else {
-        qWarning() << "YourPlugin: kv_module not available";
-    }
+    logosAPI = api;  // ← REQUIRED: base class field. Without this, all ModuleProxy calls return false.
+    // ...
 }
 ```
 
