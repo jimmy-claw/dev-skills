@@ -90,18 +90,17 @@ QT_QPA_PLATFORM=offscreen timeout 12 ~/logos-workspace/result/bin/logos-app 2>&1
 
 ## Diagnostic-first principle
 
-Before writing any code, verify that your reference and your target agree on the fundamental interface. For Logos modules:
+Before writing any code, verify your assumptions about the current state. The specific check depends on the domain — but the principle is universal:
 
-```bash
-# Check plugin IID
-strings reference_plugin.so | grep "com.example"
-strings your_plugin.so | grep "com.example"
+**Ask: what is the simplest command that would tell me if my assumption is wrong?**
 
-# Check embedded dependencies
-strings your_plugin.so | grep dependencies
-
-# Check module name
-strings your_plugin.so | grep '"name"'
-```
+Examples by domain:
+- *Plugin/module loading*: inspect the binary interface your target expects vs what you're building
+- *API integration*: call the real API with a minimal request and read the actual response
+- *Build systems*: check what the build tool actually resolves (deps, paths, versions) before assuming
+- *Database/storage*: query what's actually stored before writing new data on top of it
+- *Network services*: check what endpoints actually exist before calling them
 
 Two seconds of diagnostics beats hours of iteration in the wrong direction.
+
+**The assumption audit**: Before starting, list every assumption you're making. For each one, ask: can I verify this in under 30 seconds? If yes — verify it first.
