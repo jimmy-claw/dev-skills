@@ -525,3 +525,180 @@ Your plugin appears in the left sidebar. Click it to load.
 | linker error: `Qt6RemoteObjects undefined` | Link `logos_sdk` before `Qt6::RemoteObjects` in CMake target_link_libraries |
 | UI plugin without backend module | logos-app silently ignores the plugin — always have a backend module even if it's a no-op stub |
 | cmake target conflict `scala_module_plugin already exists` | BUILD_MODULE and BUILD_UI_PLUGIN share same CMakeLists — rename one target (e.g. `your_headless_plugin`) |
+| `initLogos` not called by logos_host | Must be `Q_INVOKABLE` — logos_host dispatches via Qt meta-object system |
+| `undefined symbol: logos_core_*` in UI plugin | logos_core symbols must use `dlsym` — direct extern decls fail at dlopen time |
+| QML context property not visible | Do NOT declare `property var board: null` in QML root — shadows the C++ context property |
+| Manifest missing `main` field | LogosApp can't find the .so — `main` platform→.so mapping is required |
+| Qt QML cache stale after UI update | Clear `~/.cache/*.qmlc` — Qt caches compiled QML |
+
+---
+
+## Part 8: Integrating Rust FFI into a Logos Core Module
+
+When your module needs async Rust logic (e.g. blockchain SDK, network protocol), wrap a Rust `cdylib` behind C FFI and call it from the Qt plugin.
+
+**Reference implementation:** [jimmy-claw/logos-zone-sequencer-module](https://github.com/jimmy-claw/logos-zone-sequencer-module) + [jimmy-claw/zone-sequencer-rs](https://github.com/jimmy-claw/zone-sequencer-rs)
+
+### Architecture
+
+```
+logos-app (Basecamp)
+  └── your_module (headless Qt plugin)
+        └── C FFI calls (dlopen/dlsym or direct link)
+              └── Rust cdylib (libfoo_rs.so)
+                    └── tokio async runtime
+                          └── External service / SDK (e.g. zone-sdk → Logos blockchain)
+```
+
+### Critical: `initLogos` must be `Q_INVOKABLE`
+
+logos_host dispatches `initLogos` via the Qt meta-object system. Without `Q_INVOKABLE`, the plugin loads but never registers with QtRO — all remote method calls silently return `false`.
+
+```cpp
+// WRONG — logos_host cannot call this
+virtual void initLogos(LogosAPI* api) {}
+
+// CORRECT
+Q_INVOKABLE virtual void initLogos(LogosAPI* api) = 0;
+```
+
+### Critical: logos_core symbols must use `dlsym` in UI plugin
+
+The UI plugin `.so` cannot have direct `extern` declarations for logos_core symbols (`logos_core_get_kv_interface`, `logos_kv_get`, `logos_kv_put`, `logos_kv_free`, `logos_request_complete`). They must be resolved at runtime via `dlsym` or the plugin fails to load with "undefined symbol".
+
+```cpp
+#include <dlfcn.h>
+
+void* libself = dlopen(nullptr, RTLD_NOW);
+auto kv_get = libself
+    ? (bool(*)(void*, const char*, char**))dlsym(libself, "logos_kv_get")
+    : nullptr;
+if (libself) dlclose(libself);
+
+if (kv_get && m_kv) {
+    char* value = nullptr;
+    if (kv_get(m_kv, key, &value) && value) {
+        // use value
+        auto kv_free = (void(*)(char*))dlsym(dlopen(nullptr, RTLD_NOW), "logos_kv_free");
+        if (kv_free) kv_free(value);
+    }
+}
+```
+
+### Critical: QML context property must match QML usage
+
+```cpp
+// In createWidget():
+quickWidget->rootContext()->setContextProperty("board", backend);
+// The name "board" must match what QML references — NOT "yoloNgBoard" if QML uses "board"
+```
+
+### Critical: Do NOT shadow context properties in QML
+
+```qml
+// WRONG — shadows the C++ context property, board is always null
+Item {
+    property var board: null
+    // ...
+}
+
+// CORRECT — just use board directly, it's injected from C++
+Item {
+    Component.onCompleted: board.refresh()
+    // ...
+}
+```
+
+### QML must be embedded via AUTORCC
+
+With `CMAKE_AUTORCC ON`, the `.qrc` file **must** appear in `add_library()` sources:
+
+```cmake
+add_library(${UI_TARGET} SHARED
+    src/your_ui_component.cpp
+    qml/your_module.qrc  # ← must be here for QML to be embedded
+)
+```
+
+Without this, `qrc:/` resolves to nothing → white screen.
+
+### Manifest must include `main` field
+
+Without the `main` platform→.so mapping, LogosApp cannot find the module to load:
+
+```json
+{
+  "name": "your_module",
+  "main": {
+    "linux-x86_64": "your_module_plugin.so",
+    "linux-amd64": "your_module_plugin.so",
+    "linux-aarch64": "your_module_plugin.so"
+  },
+  "dependencies": ["kv_module"],
+  "capabilities": []
+}
+```
+
+### Rust FFI: Tokio runtime inside Qt plugin
+
+`ZoneSequencer::init()` calls `tokio::spawn()` internally — it **must** be called inside `rt.block_on()`:
+
+```rust
+let rt = Runtime::new().unwrap();
+rt.block_on(async {
+    let sequencer = ZoneSequencer::init(config).await?; // INSIDE block_on, not before
+    sequencer.publish(data).await?;
+});
+```
+
+Use a global static runtime to avoid creating one per FFI call:
+
+```rust
+use std::sync::OnceLock;
+use tokio::runtime::Runtime;
+
+static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+fn get_runtime() -> &'static Runtime {
+    RUNTIME.get_or_init(|| Runtime::new().unwrap())
+}
+
+#[no_mangle]
+pub extern "C" fn zone_publish(data: *const c_char) -> i32 {
+    std::panic::catch_unwind(|| {
+        let rt = get_runtime();
+        rt.block_on(async { /* ... */ })
+    }).unwrap_or(-1)
+}
+```
+
+### Qt QML cache
+
+Qt caches compiled QML in `~/.cache/*.qmlc`. After updating a UI plugin, clear the cache:
+
+```bash
+find ~/.cache -name "*.qmlc" -delete
+```
+
+### zone-sdk usage patterns
+
+**Channel ID** = public key of Ed25519 signing key (NOT arbitrary hex).
+
+**Checkpoint** is mandatory after first inscription — without it, validators reject subsequent transactions.
+
+**Board identity:** `SHA256(name + ":" + secret)` → Ed25519 seed → signing key → channel ID.
+
+```rust
+use zone_sdk::{ChannelId, SigningKey};
+
+// Channel ID from signing key
+let channel_id = ChannelId::from(signing_key.public_key().to_bytes());
+```
+
+For querying existing channels, use a recent-slot cursor (not `None`/genesis) to avoid scanning all historical blocks:
+
+```rust
+let cursor_json = format!(r#"{{"slot":{},"last_id":null}}"#, tip_slot - 50000);
+let cursor = serde_json::from_str::<Cursor>(&cursor_json).ok();
+let messages = indexer.next_messages(cursor, limit).await?;
+```
