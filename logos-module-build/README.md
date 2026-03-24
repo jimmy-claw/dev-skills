@@ -2,7 +2,7 @@
 
 A skill for building and validating Logos Core IComponent modules that load correctly in LogosApp.
 
-*Validated hands-on Mar 22 2026. Every item on this list caused a real loading failure when wrong.*
+*Validated hands-on Mar 22–24 2026. Every item on this list caused a real loading failure when wrong.*
 
 ---
 
@@ -160,6 +160,81 @@ void YourPlugin::initLogos(LogosAPI* api) {
     // ...
 }
 ```
+
+---
+
+## LGX Packaging
+
+lgx is a **binary format**, NOT a tar.gz. Use the lgx CLI tool (`logos-workspace/scripts/lgx` or `nix-bundle-lgx`).
+
+```bash
+# Create an lgx package
+lgx create
+lgx add --variant linux-x86_64-dev --files ./dir --main plugin.so
+```
+
+Key rules:
+- **Variant dirs use `-dev` suffix** (`linux-x86_64-dev`) — this is what lgpm uses to find files
+- **Manifest main keys strip `-dev`** (`linux-x86_64`, `linux-amd64`) — the manifest embedded in the lgx root must NOT have `-dev`
+- **One lgx = one type** (core OR ui). Modules with both core + UI need two separate lgx files
+- Use `make install-lgx` with the Makefile pattern below
+
+---
+
+## metadata.json vs manifest.json (CRITICAL)
+
+- **metadata.json**: compiled into `.so` via `Q_PLUGIN_METADATA` — controls **runtime** dependency resolution
+- **manifest.json**: used by lgpm for packaging — controls what lgpm **installs**
+- Editing installed `manifest.json` has **NO effect** on dependency resolution
+- To change dependencies: edit `metadata.json` in the **source repo**, rebuild, reinstall
+- Always verify what's baked into the binary:
+
+```bash
+strings your_plugin.so | grep dependencies -A5
+```
+
+---
+
+## Dependency Names
+
+Dependency name = the `"name"` field in the **dependency module's** `manifest.json` (NOT the directory name).
+
+```bash
+# Check the actual name lgpm/logos-core uses
+cat ~/.local/share/Logos/LogosAppNix/modules/<dep_dir>/manifest.json | grep name
+```
+
+Wrong dep name = silent load failure or wrong module loaded.
+
+---
+
+## Makefile Pattern
+
+Add to every module repo:
+
+```makefile
+LGPM ?= lgpm
+LOGOS_DATA_DIR ?= $(HOME)/.local/share/Logos/LogosAppNix
+
+.PHONY: build install-lgx
+
+build:
+	nix build .#lgx-core .#lgx-ui
+
+install-lgx: build
+	$(LGPM) install --file result-core/*.lgx --modules-dir $(LOGOS_DATA_DIR)/modules
+	$(LGPM) install --file result-ui/*.lgx --ui-plugins-dir $(LOGOS_DATA_DIR)/plugins
+```
+
+Usage: `make install-lgx LGPM=../../logos-co/logos-workspace/scripts/lgpm`
+
+---
+
+## logos-workspace Tools
+
+- **ws CLI**: `ws build`, `ws run`, `ws develop`, `ws test` — all support `--auto-local`
+- **lgx CLI**: `logos-workspace/scripts/lgx` — create/add/verify/extract lgx packages
+- **nix-bundle-lgx**: flake input for nix-native lgx bundling
 
 ---
 
